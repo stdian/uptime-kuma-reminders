@@ -70,6 +70,7 @@
                                         <option value="manual">
                                             {{ $t("Manual") }}
                                         </option>
+                                        <option value="reminder">Reminder (напоминание по cron)</option>
                                     </optgroup>
 
                                     <!-- Should sort from A to Z in this category -->
@@ -175,6 +176,84 @@
                                         <i class="fas fa-times"></i>
                                         {{ $t("Down") }}
                                     </button>
+                                </div>
+                            </div>
+
+                            <!-- Reminder: cron, таймзона, IP, дата истечения -->
+                            <div v-if="monitor.type === 'reminder'" key="reminder-fields" class="mb-3">
+                                <div class="my-3">
+                                    <label for="reminder_cron" class="form-label">Cron</label>
+                                    <input
+                                        id="reminder_cron"
+                                        key="input-reminder-cron"
+                                        v-model="monitor.reminder_cron"
+                                        type="text"
+                                        class="form-control font-monospace"
+                                        placeholder="0 9 * * *"
+                                        maxlength="100"
+                                    />
+                                    <div class="form-text">
+                                        Формат: минута час день месяц день_недели. Пример: <code>0 9 * * *</code> — каждый день в 9:00; <code>0 10 1 * *</code> — 1-го числа каждого месяца в 10:00.
+                                    </div>
+                                </div>
+                                <div class="my-3">
+                                    <label for="reminder_timezone" class="form-label">{{ $t("Timezone") }}</label>
+                                    <input
+                                        id="reminder_timezone"
+                                        key="input-reminder-timezone"
+                                        v-model="monitor.reminder_timezone"
+                                        type="text"
+                                        class="form-control"
+                                        placeholder="UTC"
+                                        maxlength="64"
+                                    />
+                                    <div class="form-text">
+                                        Таймзона для cron, например Europe/Moscow или UTC. Пусто = UTC.
+                                    </div>
+                                </div>
+                                <div class="my-3">
+                                    <label for="reminder_server_ip" class="form-label">IP / хост сервера</label>
+                                    <input
+                                        id="reminder_server_ip"
+                                        key="input-reminder-server-ip"
+                                        v-model="monitor.reminderServerIp"
+                                        type="text"
+                                        class="form-control font-monospace"
+                                        placeholder="192.168.1.1"
+                                        maxlength="255"
+                                    />
+                                    <div class="form-text">
+                                        Необязательно. Отображается в списке мониторов рядом с названием.
+                                    </div>
+                                </div>
+                                <div class="my-3">
+                                    <label for="reminder_expiry_date" class="form-label">Дата истечения</label>
+                                    <input
+                                        id="reminder_expiry_date"
+                                        key="input-reminder-expiry-date"
+                                        v-model="monitor.reminderExpiryDate"
+                                        type="date"
+                                        class="form-control"
+                                    />
+                                    <div class="form-text">
+                                        Необязательно. Дата продления / истечения лицензии. Отображается в списке мониторов.
+                                    </div>
+                                </div>
+                                <div class="my-3">
+                                    <label for="reminder_renewal_days" class="form-label">Период продления (дней)</label>
+                                    <input
+                                        id="reminder_renewal_days"
+                                        key="input-reminder-renewal-days"
+                                        v-model.number="monitor.reminderRenewalDays"
+                                        type="number"
+                                        min="0"
+                                        class="form-control"
+                                        placeholder="0"
+                                    />
+                                    <div class="form-text">
+                                        Когда дата истечения наступит, она автоматически сдвинется вперёд на указанное число дней.
+                                        Например: 30 — раз в месяц, 365 — раз в год. 0 — не сдвигать.
+                                    </div>
                                 </div>
                             </div>
 
@@ -3343,6 +3422,15 @@ message HealthCheckResponse {
                 }
             }
 
+            if (newType === "reminder") {
+                if (!this.monitor.reminder_cron) {
+                    this.monitor.reminder_cron = "0 9 * * *";
+                }
+                if (this.monitor.interval > 60) {
+                    this.monitor.interval = 60;
+                }
+            }
+
             if (this.monitor.type === "push") {
                 if (!this.monitor.pushToken) {
                     // ideally this would require checking if the generated token is already used
@@ -3809,7 +3897,8 @@ message HealthCheckResponse {
             }
 
             if (!this.monitor.name) {
-                this.monitor.name = this.defaultFriendlyName;
+                this.monitor.name =
+                    this.monitor.type === "reminder" ? this.$t("Reminder") || "Reminder" : this.defaultFriendlyName;
             }
 
             if (!this.isInputValid()) {

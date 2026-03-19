@@ -24,8 +24,14 @@
             <router-link :to="monitorURL(monitor.id)" class="item" :class="{ disabled: !monitor.active }">
                 <div class="row">
                     <div class="small-padding d-flex gap-2 align-items-center" :class="monitorStyle">
-                        <div class="me-1">
+                        <div class="me-1 position-relative">
                             <Uptime :monitor="monitor" type="24" :pill="true" />
+                            <span
+                                v-if="monitor.type === 'reminder' && monitor.reminderExpiryDate && expiryInfo(monitor.reminderExpiryDate).state !== 'ok'"
+                                class="expiry-dot"
+                                :class="`expiry-dot--${expiryInfo(monitor.reminderExpiryDate).state}`"
+                                :title="expiryInfo(monitor.reminderExpiryDate).label"
+                            ></span>
                         </div>
                         <div class="d-flex align-items-center gap-2 flex-fill" style="min-width: 0">
                             <span v-if="hasChildren" class="collapse-padding" @click.prevent="changeCollapsed">
@@ -37,6 +43,18 @@
                             </span>
                             <div class="flex-fill text-truncate" style="min-width: 0">
                                 <div class="text-truncate">{{ monitor.name }}</div>
+                                <div v-if="monitor.type === 'reminder' && (monitor.reminderServerIp || monitor.reminderExpiryDate)" class="reminder-meta text-truncate">
+                                    <span v-if="monitor.reminderServerIp" class="me-2">
+                                        <font-awesome-icon icon="server" class="me-1" />{{ monitor.reminderServerIp }}
+                                    </span>
+                                    <span v-if="monitor.reminderExpiryDate">
+                                        <font-awesome-icon icon="calendar-times" class="me-1" />{{ monitor.reminderExpiryDate }}
+                                        <span
+                                            class="expiry-badge ms-1"
+                                            :class="`expiry-${expiryInfo(monitor.reminderExpiryDate).state}`"
+                                        >{{ expiryInfo(monitor.reminderExpiryDate).label }}</span>
+                                    </span>
+                                </div>
                                 <div v-if="monitor.tags.length > 0" class="tags gap-1">
                                     <Tag v-for="tag in monitor.tags" :key="tag" :item="tag" :size="'sm'" />
                                 </div>
@@ -84,6 +102,7 @@ import HeartbeatBar from "../components/HeartbeatBar.vue";
 import Tag from "../components/Tag.vue";
 import Uptime from "../components/Uptime.vue";
 import { getMonitorRelativeURL } from "../util.ts";
+import dayjs from "dayjs";
 
 export default {
     name: "MonitorListItem",
@@ -199,6 +218,27 @@ export default {
         this.isCollapsed = storageObject[`monitor_${this.monitor.id}`];
     },
     methods: {
+        /**
+         * Вычисляет оставшиеся/просроченные дни до даты истечения.
+         * @param {string} dateStr - дата в формате YYYY-MM-DD
+         * @returns {{ label: string, state: 'ok' | 'urgent' | 'overdue' }}
+         */
+        expiryInfo(dateStr) {
+            const today = dayjs().startOf("day");
+            const expiry = dayjs(dateStr).startOf("day");
+            const diff = expiry.diff(today, "day");
+            if (diff < 0) {
+                return { label: `просрочено ${Math.abs(diff)} дн.`, state: "overdue" };
+            } else if (diff === 0) {
+                return { label: "сегодня!", state: "critical" };
+            } else if (diff <= 2) {
+                return { label: `через ${diff} дн.`, state: "critical" };
+            } else if (diff <= 7) {
+                return { label: `через ${diff} дн.`, state: "urgent" };
+            } else {
+                return { label: `через ${diff} дн.`, state: "ok" };
+            }
+        },
         /**
          * Changes the collapsed value of the current monitor and saves
          * it to local storage
@@ -394,5 +434,91 @@ export default {
 .bottom-style {
     margin-left: -10px;
     margin-top: 5px;
+}
+
+.reminder-meta {
+    font-size: 0.75rem;
+    opacity: 0.75;
+    margin-top: 2px;
+    padding-left: 4px;
+}
+
+.expiry-badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0 5px;
+    border-radius: 4px;
+    vertical-align: middle;
+    line-height: 1.5;
+}
+
+.expiry-ok {
+    background-color: rgba(32, 168, 216, 0.15);
+    color: #20a8d8;
+}
+
+.dark .expiry-ok {
+    background-color: rgba(32, 168, 216, 0.25);
+    color: #5bc0de;
+}
+
+.expiry-urgent {
+    background-color: rgba(255, 152, 0, 0.18);
+    color: #e67e22;
+}
+
+.dark .expiry-urgent {
+    background-color: rgba(255, 152, 0, 0.28);
+    color: #f39c12;
+}
+
+.expiry-critical {
+    background-color: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+}
+
+.dark .expiry-critical {
+    background-color: rgba(220, 53, 69, 0.25);
+    color: #f86c6b;
+}
+
+.expiry-overdue {
+    background-color: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+}
+
+.dark .expiry-overdue {
+    background-color: rgba(220, 53, 69, 0.25);
+    color: #f86c6b;
+}
+
+/* Дополнительный индикатор рядом с основным статусом */
+.expiry-dot {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--bs-body-bg, #fff);
+}
+
+.expiry-dot--urgent {
+    background-color: #e67e22;
+}
+
+.expiry-dot--critical {
+    background-color: #dc3545;
+    animation: expiry-pulse 1.4s ease-in-out infinite;
+}
+
+.expiry-dot--overdue {
+    background-color: #dc3545;
+}
+
+@keyframes expiry-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.75); }
 }
 </style>

@@ -727,7 +727,7 @@ let needSetup = false;
                 checkLogin(socket);
                 let bean = R.dispense("monitor");
 
-                let notificationIDList = monitor.notificationIDList;
+                let notificationIDList = monitor.notificationIDList ?? {};
                 delete monitor.notificationIDList;
 
                 // Ensure status code ranges are strings
@@ -787,11 +787,15 @@ let needSetup = false;
                     monitorID: bean.id,
                 });
             } catch (e) {
-                log.error("monitor", `Error adding Monitor: ${monitor.id} User ID: ${socket.userID}`);
+                const errMsg = e?.message ?? (typeof e === "string" ? e : String(e));
+                log.error("monitor", `Error adding Monitor: ${monitor.id ?? "new"} User ID: ${socket.userID} - ${errMsg}`);
+                if (e?.stack) {
+                    log.error("monitor", e.stack);
+                }
 
                 callback({
                     ok: false,
-                    msg: e.message,
+                    msg: errMsg || "Unknown error",
                 });
             }
         });
@@ -929,6 +933,11 @@ let needSetup = false;
                 bean.rabbitmqPassword = monitor.rabbitmqPassword;
                 bean.conditions = JSON.stringify(monitor.conditions);
                 bean.manual_status = monitor.manual_status;
+                bean.reminder_cron = monitor.reminder_cron || null;
+                bean.reminder_timezone = monitor.reminder_timezone || null;
+                bean.reminder_server_ip = monitor.reminderServerIp || null;
+                bean.reminder_expiry_date = monitor.reminderExpiryDate || null;
+                bean.reminder_renewal_days = parseInt(monitor.reminderRenewalDays) || 0;
                 bean.system_service_name = monitor.system_service_name;
                 bean.expected_tls_alert = monitor.expectedTlsAlert;
 
@@ -1768,8 +1777,9 @@ let needSetup = false;
 async function updateMonitorNotification(monitorID, notificationIDList) {
     await R.exec("DELETE FROM monitor_notification WHERE monitor_id = ? ", [monitorID]);
 
-    for (let notificationID in notificationIDList) {
-        if (notificationIDList[notificationID]) {
+    const list = notificationIDList && typeof notificationIDList === "object" ? notificationIDList : {};
+    for (let notificationID in list) {
+        if (list[notificationID]) {
             let relation = R.dispense("monitor_notification");
             relation.monitor_id = monitorID;
             relation.notification_id = notificationID;

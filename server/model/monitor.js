@@ -203,6 +203,12 @@ class Monitor extends BeanModel {
             conditions: JSON.parse(this.conditions),
             ipFamily: this.ipFamily,
             expectedTlsAlert: this.expected_tls_alert,
+            manual_status: this.manual_status,
+            reminder_cron: this.reminder_cron,
+            reminder_timezone: this.reminder_timezone,
+            reminderServerIp: this.reminder_server_ip,
+            reminderExpiryDate: this.reminder_expiry_date,
+            reminderRenewalDays: this.reminder_renewal_days ?? 0,
 
             // ping advanced options
             ping_numeric: this.isPingNumeric(),
@@ -251,6 +257,47 @@ class Monitor extends BeanModel {
 
         data.includeSensitiveData = includeSensitiveData;
         return data;
+    }
+
+    /**
+     * При сохранении в БД не включать runtime-поля (их нет в таблице monitor).
+     * @inheritdoc
+     */
+    export(camelCase = true) {
+        const obj = super.export(camelCase);
+        delete obj.root_certificates;
+        delete obj.rootCertificates;
+        delete obj.prometheus;
+        delete obj.$savedRootCertificates;
+        delete obj.$savedPrometheus;
+        delete obj.$saved_root_certificates;
+        delete obj.$saved_prometheus;
+        return obj;
+    }
+
+    /**
+     * Перед сохранением убрать runtime-поля (на случай каскадного store из другого бина).
+     * Имена без _ — RedBean запрещает свойства с ведущим подчёркиванием.
+     */
+    onUpdate() {
+        this.$savedRootCertificates = this.rootCertificates;
+        this.$savedPrometheus = this.prometheus;
+        delete this.rootCertificates;
+        delete this.prometheus;
+    }
+
+    /**
+     * После сохранения вернуть runtime-поля.
+     */
+    onAfterUpdate() {
+        if (this.$savedRootCertificates !== undefined) {
+            this.rootCertificates = this.$savedRootCertificates;
+        }
+        if (this.$savedPrometheus !== undefined) {
+            this.prometheus = this.$savedPrometheus;
+        }
+        delete this.$savedRootCertificates;
+        delete this.$savedPrometheus;
     }
 
     /**

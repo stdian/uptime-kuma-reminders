@@ -385,6 +385,24 @@ class Database {
             await R.autoloadModels("./server/model");
         }
 
+        // При сохранении monitor убирать runtime-поля (их нет в таблице) — иначе каскадный store даёт SQLITE_ERROR
+        const originalStore = R.store.bind(R);
+        R.store = async function (bean, changedFieldsOnly) {
+            if (bean?.beanMeta?.type === "monitor") {
+                const savedRootCertificates = bean.rootCertificates;
+                const savedPrometheus = bean.prometheus;
+                delete bean.rootCertificates;
+                delete bean.prometheus;
+                try {
+                    return await originalStore(bean, changedFieldsOnly);
+                } finally {
+                    if (savedRootCertificates !== undefined) bean.rootCertificates = savedRootCertificates;
+                    if (savedPrometheus !== undefined) bean.prometheus = savedPrometheus;
+                }
+            }
+            return await originalStore(bean, changedFieldsOnly);
+        };
+
         if (dbConfig.type === "sqlite") {
             if (!noLog) {
                 log.debug("db", "SQLite config:");
